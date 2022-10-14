@@ -1,4 +1,5 @@
 
+// Small plugin to disable the Authorize button without having to edit the original openapi.yaml file
 const DisableAuthorizePlugin = function() {
   return {
     wrapComponents: {
