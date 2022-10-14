@@ -10,12 +10,12 @@ window.onload = function() {
     tryItOutEnabled: false,
     presets: [
       SwaggerUIBundle.presets.apis,
-      SwaggerUIStandalonePreset
-    ],
-    plugins: [
-      SwaggerUIBundle.plugins.DownloadUrl
-    ],
-    layout: "StandaloneLayout"
+      //SwaggerUIStandalonePreset
+    ]
+    //plugins: [
+    //  SwaggerUIBundle.plugins.DownloadUrl
+    //],
+    //layout: "StandaloneLayout"
   });
 
   //</editor-fold>
