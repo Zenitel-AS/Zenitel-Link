@@ -6,6 +6,8 @@ window.onload = function() {
     url: "https://zenitel-as.github.io/Zenitel-Link/openapi/openapi.yaml",
     dom_id: '#swagger-ui',
     deepLinking: true,
+    supportedSubmitMethods: [],
+    tryItOutEnabled: false,
     presets: [
       SwaggerUIBundle.presets.apis,
       SwaggerUIStandalonePreset
