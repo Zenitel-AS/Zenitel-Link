@@ -1,3 +1,12 @@
+
+const DisableAuthorizePlugin = function() {
+  return {
+    wrapComponents: {
+      AuthorizeBtn: () => () => null
+    }
+  }
+}
+
 window.onload = function() {
   //<editor-fold desc="Changeable Configuration Block">
 
@@ -10,12 +19,13 @@ window.onload = function() {
     tryItOutEnabled: false,
     presets: [
       SwaggerUIBundle.presets.apis,
-      //SwaggerUIStandalonePreset
-    ]
-    //plugins: [
-    //  SwaggerUIBundle.plugins.DownloadUrl
-    //],
-    //layout: "StandaloneLayout"
+      // SwaggerUIStandalonePreset
+    ],
+    plugins: [
+      DisableAuthorizePlugin
+      //  SwaggerUIBundle.plugins.DownloadUrl
+    ],
+    // layout: "StandaloneLayout"
   });
 
   //</editor-fold>
