@@ -39,7 +39,7 @@ paths:
         - basicAuth: []
       responses:
         "401":
-          $ref: '#/components/responses/unauthorized_error'
+          $ref: '#/components/responses/unauthorized_error401'
         "200":
           description: "Provided correct username/password, JWT token is returned"
           content:
@@ -78,6 +78,8 @@ paths:
                 $ref: '#/components/schemas/device_account_state'
         "400":
           $ref: '#/components/responses/application_error400'
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
 
 
   /api/system/info/net_interfaces:
@@ -123,6 +125,8 @@ paths:
                             type: string
                             example: "global"
                             enum:  [ "global",  "link" ]
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
 
 
   /api/system/info/ntp:
@@ -133,6 +137,8 @@ paths:
       responses:
         "200":
           description: "TBD"
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
 
   /api/devices/device;{device_id}/gpos/gpo;{gpo_id}:
     post:
@@ -160,14 +166,12 @@ paths:
       responses:
         "200":
           description: "Successfully changed GPO status."
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/gpo_config'
         "404":
           $ref: '#/components/responses/application_error404'
         "400":
           $ref: '#/components/responses/application_error400'
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
 
 
   /api/devices/device;{device_id}/gpos:
@@ -200,6 +204,8 @@ paths:
           $ref: '#/components/responses/application_error404'
         "400":
           $ref: '#/components/responses/application_error400'
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
 
   /api/devices/device;{device_id}/gpis:
     get:
@@ -231,6 +237,8 @@ paths:
           $ref: '#/components/responses/application_error404'
         "400":
           $ref: '#/components/responses/application_error400'
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
 
   /api/devices/device;{device_id}/key:
     post:
@@ -261,6 +269,8 @@ paths:
           $ref: '#/components/responses/application_error404'
         "400":
           $ref: '#/components/responses/application_error400'
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
 
   /api/calls:
     post:
@@ -297,7 +307,8 @@ paths:
           $ref: '#/components/responses/application_error404'
         "400":
           $ref: '#/components/responses/application_error400'
-
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
     get:
       summary: "wamp URI: com.zenitel.calls"
       tags: ["Call Handling"]
@@ -322,7 +333,7 @@ paths:
           description: "Optional call identifier filter to limit selection"
           required: false
           schema:
-            $ref: '#/components/schemas/call_id'
+            $ref: '#/components/schemas/call_id_filter'
         - in: query
           name: state
           description: "Optional state filter to limit selection"
@@ -349,12 +360,15 @@ paths:
           $ref: '#/components/responses/application_error404'
         "400":
           $ref: '#/components/responses/application_error400'
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
 
     delete:
       summary: "wamp URI: com.zenitel.calls.delete"
       tags: ["Call Handling"]
-      description: "Hang up all calls where supplied dirno is active. The progress of the affected calls
-                    may be followed by subscribing to 'com.zenitel.calls' event topic"
+      description: "Hang up all calls where supplied dirno is active. Note that if the supplied dirno argument contains
+                    a dirno with no active calls, the response will still be 200 OK, but with an empty array in the response body.
+                    The progress of the affected calls may be followed by subscribing to 'com.zenitel.calls' event topic"
       parameters:
         - in: query
           name: dirno
@@ -372,10 +386,10 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/deleted_calls'
-        "404":
-          $ref: '#/components/responses/application_error404'
         "400":
           $ref: '#/components/responses/application_error400'
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
 
   /api/call_legs:
     get:
@@ -412,13 +426,13 @@ paths:
           description: "Optional call leg identifier for one specific call leg."
           required: false
           schema:
-            $ref: '#/components/schemas/leg_id'
+            $ref: '#/components/schemas/leg_id_filter'
         - in: query
           name: call_id
           description: "Optional call id identifier filter to limit selection."
           required: false
           schema:
-            $ref: '#/components/schemas/call_id'
+            $ref: '#/components/schemas/call_id_filter'
         - in: query
           name: state
           description: "Optional state filter to limit selection"
@@ -444,6 +458,8 @@ paths:
           $ref: '#/components/responses/application_error404'
         "400":
           $ref: '#/components/responses/application_error400'
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
 
   /api/calls/call;{call_id}:
     delete:
@@ -457,7 +473,7 @@ paths:
           description: "Hang up the specified call using the call_id."
           required: true
           schema:
-            $ref: '#/components/schemas/call_id'
+            $ref: '#/components/schemas/call_id_path'
       responses:
         "200":
           description: "Successfully hungup call"
@@ -469,6 +485,8 @@ paths:
           $ref: '#/components/responses/application_error404'
         "400":
           $ref: '#/components/responses/application_error400'
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
     post:
       summary: "wamp URI : com.zenitel.calls.call.post"
       tags: ["Call Handling"]
@@ -480,7 +498,7 @@ paths:
           description: "Send action to the specified call using the call_id."
           required: true
           schema:
-            $ref: '#/components/schemas/call_id'
+            $ref: '#/components/schemas/call_id_path'
       requestBody:
         required: true
         content:
@@ -500,6 +518,8 @@ paths:
           $ref: '#/components/responses/application_error404'
         "400":
           $ref: '#/components/responses/application_error400'
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
 
 
   /api/call_queues:
@@ -529,6 +549,8 @@ paths:
           $ref: '#/components/responses/application_error404'
         "400":
           $ref: '#/components/responses/application_error400'
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
 
   #
   #  WAMP Events
@@ -573,8 +595,7 @@ paths:
       summary: "Subscribe to call queue state"
       tags: ["Convenience Events"]
       description: "Subscribe to queue call events whenever a call is joining or leaving a queue.
-                    This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing.
-                    **NOTE : This event is under construction, the content will change.**"
+                    This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
       externalDocs:
         description: "Wamp subscribe:"
         url: "https://crossbar.io/docs/How-Subscriptions-Work/"
@@ -801,15 +822,30 @@ components:
       example: '101'
       pattern: '^[\w]+$'
       
+    call_id_path:
+      type: string
+      description: "URI path segment parameter for unique ID of a call"
+      example: "call_id=12345"
+      # current swagger version does not allow empty integer fields, that is why there is both integer and string version
+    call_id_filter:
+      type: string
+      description: "Unique ID filter of a call"
+      example: "12345"
+
     call_id:
       type: integer
-      description: "Unique ID of call"
-      example: "31245"
-
+      description: "Unique ID of a call"
+      example: 12345
+      
     leg_id:
       type: integer
       description: "Unique ID of call leg"
-      example: "67346"
+      example: 56789
+
+    leg_id_filter:
+      type: string
+      description: "Unique ID filter of call leg"
+      example: "56789"
 
     call_state:
       type: string
@@ -1118,16 +1154,6 @@ components:
             properties:
               call_id:
                 $ref: '#/components/schemas/call_id'
-              from_leg_id:
-                allOf:
-                  - $ref: '#/components/schemas/leg_id'
-                  - description: "Caller leg identifier"
-              action:
-                description: "Action to be performed, defaults to call setup if omitted"
-                enum: [setup, answer]
-                example: "setup"
-                type: string
-
 
     post_call_id:
       description: "Call action accepted, effect depends on call state"
@@ -1138,17 +1164,8 @@ components:
             properties:
               call_id:
                 $ref: '#/components/schemas/call_id'
-              from_leg_id:
-                 allOf:
-                   - $ref: '#/components/schemas/leg_id'
-                   - description: "Caller leg identifier"
-              action:
-                description: "Action to be performed, defaults to call setup if omitted"
-                enum: [answer]
-                example: "answer"
-                type: string
 
-    unauthorized_error:
+    unauthorized_error401:
       description: Authentication information is missing or invalid
       headers:
         WWW_Authenticate:
