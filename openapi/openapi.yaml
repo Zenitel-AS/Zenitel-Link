@@ -3,20 +3,20 @@ openapi: 3.0.0
 info:
   title: Zenitel Link interface
   description: |
-    **Zenitel Link** is composed of two different interfaces: 
+    **Zenitel Link** is composed of two different interfaces:
     1. REST interface for requesting information, and initiating call or device operations.
     2. WAMP (wamp-proto.org) interface that offer the same, but also event subscription to system events in addition.
-    
+
     Most of the REST operations will result in one or more system events through the WAMP interface.
     There are events published at changes in call progress, call queue changes, door opened etc.
     Please see section **Events** and **Trace** buttons below for event defintions.
-    It is possible to poll information using the REST interface, but it is way more efficient to subscribe to the WAMP events. 
+    It is possible to poll information using the REST interface, but it is way more efficient to subscribe to the WAMP events.
     The REST interface is a wrapper for the WAMP interface, hence, every REST operation has a WAMP counterpart which can be used directly.
 
     **How to Use:**
 
     Use the **'Authorize'** button and authorize with correct username and password. Then use **/api/auth/login**
-    to get the JWT token which you then copy and paste into Authorize' bearerAuth. The token will then be included 
+    to get the JWT token which you then copy and paste into Authorize' bearerAuth. The token will then be included
     in the HTTP header for  all other requests.
 
   version: 1.0.0
@@ -27,7 +27,7 @@ paths:
   #
   /api/auth/login:
     post:
-      description: "Login and get a JWT token which is needed to access other pages. 
+      description: "Login and get a JWT token which is needed to access other pages.
                     In order to login and start using Zenitel Link, the external application
                     first needs to send a login request using this URI.
                     The username and password are encrypted as Base64 using standard HTTP Basic Access Authentication (Authorization: Basic xxxxx).
@@ -59,8 +59,8 @@ paths:
       parameters:
         - in: query
           name: state
-          description: | 
-                    Filter on state of managed devices. 
+          description: |
+                    Filter on state of managed devices.
                     - Provisioned means all managed devices (default without filter argument).
                     - Registered means the device is or has been SIP registered.
                     - Reachable means the device is SIP registered and a valid endpoint.
@@ -117,34 +117,133 @@ paths:
                           family:
                             type: string
                             example: "inet"
-                            enum:  [ "inet",  "inet6" ]
+                            enum: ["inet", "inet6"]
                           prefixlen:
                             type: integer
                             example: "28"
                           scope:
                             type: string
                             example: "global"
-                            enum:  [ "global",  "link" ]
+                            enum: ["global", "link"]
         "401":
           $ref: '#/components/responses/unauthorized_error401'
 
 
-  /api/system/info/ntp:
+  /api/system/license/fingerprint:
     get:
-      summary: "wamp URI (TBD): com.zenitel.system.info.ntp"
+      summary: "wamp URI: com.zenitel.system.license.fingerprint"
       tags: ["System"]
-      description: "TBD : Return time synchronization status"
+      description: "Returns the system fingerprint used in license generation"
       responses:
         "200":
-          description: "TBD"
+          description: "Success: Return fingerprint as JSON and additional system information"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  binding:
+                    type: string
+                    example: d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f
+                  mac:
+                    type: string
+                    example: 12:34:56:78:9a:bc
+                  vm:
+                    type: integer
+                    example: 0
+
+
         "401":
           $ref: '#/components/responses/unauthorized_error401'
+        "500":
+          description: "Failed to read hardware fingerprint"
+
+  /api/system/license:
+    post:
+      summary: "wamp URI: com.zenitel.system.license.post"
+      tags: ["System"]
+      description: "Activate licenseses included in signed JSON payload"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                signature:
+                  description: "Validation of license file"
+                  example: "<cryptographic signature>"
+                  type: string
+                payload:
+                  description: "Licenses and other license information"
+                  type: object
+                  properties:
+                    binding:
+                      description: "Hardware specific signature"
+                      type: string
+                      example: "<signature>"
+                    licenses:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          license:
+                            type: string
+                            example: "LC-IC1"
+                          description:
+                            type: "string"
+                            example: "Sample Device licenses"
+                          quantity:
+                            type: integer
+                            example: 2
+      responses:
+        "200":
+          description: "License OK"
+        "401":
+          description: "Failed to apply licenses due to issues with the license file"
+
+  /api/system/security/certificate:
+    post:
+      summary: "wamp URI: com.zenitel.system.security.certificate.post"
+      tags: ["System"]
+      description: "Upload certificates as JSON payload"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  description: "Name to give certificate"
+                  example: "webserver.pem"
+                  type: string
+                scope:
+                  description: "Certificate scope"
+                  example: "https"
+                  type: string
+                certificate:
+                  description: "Certificate in PEM format"
+                  example: "-----BEGIN CERTIFICATE-----\nMIIFtzC...\n-----END CERTIFICATE-----\n-----BEGIN RSA PRIVATE KEY-----\nMIIJKgIBAAK..\n-----END RSA PRIVATE KEY-----"
+                  type: string
+      responses:
+        "200":
+          description: "Certificate applied"
+        "401":
+          description: "Failed to apply certificate due to issues with the provided certificate"
+        "500":
+          description: "Server error"
 
   /api/devices/device;{device_id}/gpos/gpo;{gpo_id}:
     post:
       summary: "wamp URI: com.zenitel.devices.device.gpos.gpo.post"
       tags: ["Device"]
-      description: "Change a single General-Purpose Output (GPO), i.e. relay / gpio / e_relay controlled by a device."
+      description: |
+                    Change a single digital output controlled by a device. The gpo_id is made up of the type and the index starting from 1.
+                    The index correspond to the array index in the device GPIO configuration, i.e the 'outputs' (relay) and 'gpio' arrays.
+                    The number of outputs for each type may vary between device types.
+                    In order to set a GPIO by this URI, the corresponding GPIO has to be configured as output.
+                    Example: id=relay2, id=gpio5.
       parameters:
         - in: path
           name: device_id
@@ -156,7 +255,7 @@ paths:
           name: gpo_id
           required: true
           schema:
-            $ref: '#/components/schemas/gpio_id'
+            $ref: '#/components/schemas/gpo_id'
       requestBody:
         required: true
         content:
@@ -195,11 +294,11 @@ paths:
         "200":
           description: "Successfully read GPO status."
           content:
-             application/json:
-                schema:
-                  type: array
-                  items:
-                     $ref: '#/components/schemas/gpo'
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/gpo'
         "404":
           $ref: '#/components/responses/application_error404'
         "400":
@@ -228,11 +327,11 @@ paths:
         "200":
           description: "Successfully read GPI status."
           content:
-             application/json:
-                schema:
-                  type: array
-                  items:
-                    $ref: '#/components/schemas/gpi'
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/gpi'
         "404":
           $ref: '#/components/responses/application_error404'
         "400":
@@ -276,8 +375,10 @@ paths:
     post:
       summary: "wamp URI: com.zenitel.calls.post"
       tags: ["Call Handling"]
-      description: "Setup a call from the originating SIP endpoint to a destination endpoint. The progress of the call 
-                    may be followed by subscribing to 'com.zenitel.calls' event topic"
+      description: "Setup a call from the originating SIP endpoint to a destination endpoint. The progress of the call
+                    may be followed by subscribing to 'com.zenitel.calls' event topic. The RPC waits for the call
+                    to progress to one of the states 'queued', 'ringing', 'in_call' or 'ended', and responds with
+                    the current call state record."
       requestBody:
         required: true
         content:
@@ -298,10 +399,13 @@ paths:
                   enum: [setup, answer]
                   example: "setup"
                   type: string
+                verbose:
+                  description: "If true, call_leg information is nested into the response"
+                  type: boolean
       responses:
         "200":
           $ref: '#/components/responses/post_call'
-        "202":
+        "201":
           $ref: '#/components/responses/post_call'
         "404":
           $ref: '#/components/responses/application_error404'
@@ -309,11 +413,15 @@ paths:
           $ref: '#/components/responses/application_error400'
         "401":
           $ref: '#/components/responses/unauthorized_error401'
+        "409":
+          description: "Attempt to answer to busy to_dirno"
+        "500":
+          description: "Server error, time out waiting for call to reach desired state"
     get:
       summary: "wamp URI: com.zenitel.calls"
       tags: ["Call Handling"]
-      description: "Get active calls and states. Without arguments, all active calls are returned. 
-                    Query paramters may be used to limit the selection. If multiple query parameters are 
+      description: "Get active calls and states. Without arguments, all active calls are returned.
+                    Query paramters may be used to limit the selection. If multiple query parameters are
                     provided, they are logically ANDed together which limits the selection further."
       parameters:
         - in: query
@@ -390,16 +498,18 @@ paths:
           $ref: '#/components/responses/application_error400'
         "401":
           $ref: '#/components/responses/unauthorized_error401'
+        "500":
+          description: "Server error, time out waiting for call to end"
 
   /api/call_legs:
     get:
       summary: "wamp URI: com.zenitel.call_legs"
       tags: [Call Handling]
-      description: "Get active call_legs and states. A call_leg is a component of a call. Normally there arE
+      description: "Get active call_legs and states. A call_leg is a component of a call. Normally there are
                     two call legs for a normal call from one device to another; one for the caller and one for the
                     calleee. But for queue calls or group calls, there could be many call legs for one call.
                     Without arguments, all active call legs are returned.
-                    Query paramters may be used to limit the selection. If multiple query parameters are 
+                    Query paramters may be used to limit the selection. If multiple query parameters are
                     provided, they are logically ANDed together which limits the selection further."
       parameters:
         - in: query
@@ -438,7 +548,7 @@ paths:
           description: "Optional state filter to limit selection"
           required: false
           schema:
-            $ref: '#/components/schemas/call_state_filter'
+            $ref: '#/components/schemas/leg_state_filter'
         - in: query
           name: leg_role
           required: false
@@ -487,40 +597,6 @@ paths:
           $ref: '#/components/responses/application_error400'
         "401":
           $ref: '#/components/responses/unauthorized_error401'
-    post:
-      summary: "wamp URI : com.zenitel.calls.call.post"
-      tags: ["Call Handling"]
-      description: "Sends an action to a specified call. The progress of the affected call
-                    may be followed by subscribing to 'com.zenitel.call' event topic"
-      parameters:
-        - in: path
-          name: call_id
-          description: "Send action to the specified call using the call_id."
-          required: true
-          schema:
-            $ref: '#/components/schemas/call_id_path'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                action:
-                  description: "Action to be performed"
-                  enum: [answer]
-                  example: "answer"
-                  type: string
-      responses:
-        "200":
-          $ref: '#/components/responses/post_call_id'
-        "404":
-          $ref: '#/components/responses/application_error404'
-        "400":
-          $ref: '#/components/responses/application_error400'
-        "401":
-          $ref: '#/components/responses/unauthorized_error401'
-
 
   /api/call_queues:
     get:
@@ -534,7 +610,7 @@ paths:
           description: "Optional query parameter to filter on queue directory number"
           required: false
           schema:
-            type: string 
+            type: string
 
       responses:
         "200":
@@ -552,13 +628,37 @@ paths:
         "401":
           $ref: '#/components/responses/unauthorized_error401'
 
+  /api/calls/call/open_door:
+    post:
+      summary: "wamp URI: com.zenitel.calls.call.open_door.post"
+      tags: ["Call Handling"]
+      description: "Open a door in a call. If valid: com.zenitel.system.open_door event is published. Depending on configuration also set GPO on door device using a RPC."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                from_dirno:
+                  description: "Directory number of operator in a call with the door"
+                  example: "101"
+                  type: string
+      responses:
+        "200":
+          description: "Successfully sent an open door rpc to the device"
+        "403":
+          description: "Permission denied to open the door"
+        "404":
+          description: "Device is not in call or has no door assigned"
+
   #
   #  WAMP Events
   #
   com.zenitel.call:
     trace:
       summary: "WAMP subscribe to call events"
-      tags: ["Core Events"]
+      tags: ["Events"]
       description: "Subscribe to call events. Whenever a call is initiated, progress or hangup, an event will be published on this channel.
                     This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
       externalDocs:
@@ -575,7 +675,7 @@ paths:
   com.zenitel.call_leg:
     trace:
       summary: "WAMP subscribe to call leg events"
-      tags: ["Core Events"]
+      tags: ["Events"]
       description: "Subscribe to call leg events. Whenever a call leg is initiated or updated, an event will be published
                     on this channel.
                     This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
@@ -590,28 +690,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/call_leg'
 
-  com.zenitel.call_queue:
-    trace:
-      summary: "Subscribe to call queue state"
-      tags: ["Convenience Events"]
-      description: "Subscribe to queue call events whenever a call is joining or leaving a queue.
-                    This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
-      externalDocs:
-        description: "Wamp subscribe:"
-        url: "https://crossbar.io/docs/How-Subscriptions-Work/"
-      responses:
-        "Event":
-          description: "A queue event occurred"
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/call_queue'
-
   com.zenitel.device.{dirno}.gpo:
     trace:
       summary: "Subscribe to device gpo's"
-      tags: ["Core Events"]
-      description: "Subscribe on gpo/relay changes. 
+      tags: ["Events"]
+      description: "Subscribe on gpo/relay changes.
                     This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
       externalDocs:
         description: "Wamp subscribe:"
@@ -630,12 +713,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/gpo'
 
-
-  
   com.zenitel.device.{dirno}.gpi:
     trace:
       summary: "Subscribe to device gpi's"
-      tags: ["Core Events"]
+      tags: ["Events"]
       description: "Subscribe on gpi/gpio changes. This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
       externalDocs:
         description: "Wamp subscribe:"
@@ -657,11 +738,11 @@ paths:
   com.zenitel.system.device_account:
     trace:
       summary: "Subscribe to state change of devices"
-      tags: ["Core Events"]
+      tags: ["Events"]
       description: "Subscribe to device state changes. This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
       externalDocs:
         description: "Wamp subscribe:"
-        url: "https://crossbar.io/docs/How-Subscriptions-Work/" 
+        url: "https://crossbar.io/docs/How-Subscriptions-Work/"
       responses:
         "Event":
           description: "A new device was added or change in SIP registration."
@@ -673,7 +754,7 @@ paths:
   com.zenitel.system.open_door:
     trace:
       summary: "WAMP subscribe to open door events"
-      tags: ["Core Events"]
+      tags: ["Events"]
       description: "Dialing digit 6 in conversation will trigger an open door event. This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
       externalDocs:
         description: "Wamp subscribe:"
@@ -690,7 +771,7 @@ paths:
   com.zenitel.wamp.session.on_join:
     trace:
       summary: "Subscribe to WAMP session start event"
-      tags: ["Core Events"]
+      tags: ["Events"]
       description: "Subscribe WAMP connection start event. The event is similar to
         https://wamp-proto.org/_static/gen/wamp_latest.html#x14-5-1-2-session-meta-events,
         except that the data is placed in 'arglist[0]', not in 'details'.
@@ -722,7 +803,7 @@ paths:
   com.zenitel.wamp.session.on_leave:
     trace:
       summary: "Subscribe to WAMP session close event"
-      tags: ["Core Events"]
+      tags: ["Events"]
       description: "Subscribe WAMP connection close event. This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
       externalDocs:
         description: "Wamp subscribe:"
@@ -750,7 +831,7 @@ paths:
 
 
 security:
-    - bearerAuth: []
+  - bearerAuth: []
 
 #
 # Table of tags
@@ -760,10 +841,8 @@ tags:
   - name: System
   - name: Call Handling
   - name: Device
-  - name: Core Events
+  - name: Events
     description: For subscription to WAMP topics
-  - name: Convenience Events
-    description: WAMP topics aggregating information from multiple core events
 
 #
 #  Schemea Components
@@ -777,7 +856,7 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-  
+
   schemas:
     mac_address:
       type: string
@@ -796,12 +875,12 @@ components:
         - type: string
           pattern: '^mac_address=[0-9a-f:]{12,20}$'
 
-    gpio_id:
+    gpo_id:
       type: string
-      description: "Id of the relay/gpio/e_relay/gpo/gpi. The values depend on hardware support. Examples: relay1, relay2, gpio1, e_relay1, gpo1, gpi2."
+      description: "Identity of the output to control. The values depend on hardware support. Examples are: relay1, relay2, gpio1"
       example: "id=relay1"
       pattern: '^id=[\w]+$'
-    
+
     device_account_filter:
       type: string
       enum: ["provisioned", "registered", "reachable", "unreachable", "unknown"]
@@ -809,19 +888,19 @@ components:
 
     gpio_filter:
       type: string
-      description: "Id of the relay/gpio/e_relay/gpo/gpi. The values depend on hardware support. Examples: relay1, relay2, gpio1, e_relay1, gpo1, gpi2."
+      description: "Query single output or input. Examples: relay1, relay2, gpio1, gpi2."
       example: "relay1"
       pattern: '^[\w]+$'
 
     dirno_filter:
       type: string
       # for some reason, swagger does not understand the 'required=false'
-      # for query and automatically inserts dirno as value which then fails 
-      # the pattern test with [\d] which it should have been. 
+      # for query and automatically inserts dirno as value which then fails
+      # the pattern test with [\d] which it should have been.
       # Leave it for now, but dirno should be digits only. Also tried with integer...
       example: '101'
       pattern: '^[\w]+$'
-      
+
     call_id_path:
       type: string
       description: "URI path segment parameter for unique ID of a call"
@@ -836,7 +915,7 @@ components:
       type: integer
       description: "Unique ID of a call"
       example: 12345
-      
+
     leg_id:
       type: integer
       description: "Unique ID of call leg"
@@ -850,15 +929,27 @@ components:
     call_state:
       type: string
       description: "State of call"
-      enum:  ["allocated", "init", "forwarding", "queued", "ringing", "in_call", "ended"]
-      example: "in_call"
+      enum: ["init", "forwarding", "queued", "ringing", "in_call", "ended"]
+      example: "ringing"
 
     call_state_filter:
       type: string
       description: "Filter on state of call"
       enum: ["queued", "ringing", "in_call"]              # non transient states
       example: "in_call"
-    
+
+    leg_state:
+      type: string
+      description: "State of call leg"
+      enum: ["init", "waiting", "forwarding", "queued", "ringing", "in_call", "ended"]
+      example: "ringing"
+
+    leg_state_filter:
+      type: string
+      description: "State of call leg"
+      enum: ["waiting", "queued", "ringing", "in_call"]              # non transient states
+      example: "in_call"
+
     leg_role:
       type: string
       description: "Call leg role"
@@ -868,13 +959,14 @@ components:
     call_reason:
       type: string
       description: "The reason for last change of the call / call-leg state)"
-      enum:  ["new", "forward", "busy", "timeout", "progress", "accept", "auto-answer", "cancel", "reject" , "hangup"]
+      enum: ["incoming", "rpc", "busy", "timeout", "progress", "unconditional", "from_ring", "accept",
+             "other_answer", "auto-answer", "cancel", "reject", "success", "failure", "priority", "hangup"]
       example: "accept"
 
     call_type:
       type: string
       description: "The type of call. Supported as of now is normal two party call and queue call."
-      enum: ["normal_call", "queue_call"]
+      enum: ["normal_call", "queue_call", "activation_call"]
 
     call_priority:
       type: integer
@@ -903,12 +995,27 @@ components:
             - $ref: '#/components/schemas/leg_id'
             - description: "The caller leg identifier of the incoming caller"
         to_dirno:
-          description: "Recipient directory number"
+          description: "Originally called directory number"
+          type: string
+          example: "102"
+        to_dirno_current:
+          description: "Currently called directory number. Initially same as to_dirno, but may be updated as call progresses due to queue call answer or call forwarding."
           type: string
           example: "102"
         priority:
           $ref: '#/components/schemas/call_priority'
-      required: [id, state, reason, call_type ,from_dirno , from_leg_id, to_dirno,priority]
+        start_time:
+          type: string
+          description: "Timestamp when call was created, ISO 8601 format with timezone offset (decisecond precision)"
+          example: "2022-11-01 10:14:24.1+00:00"
+        queue_pos:
+          type: integer
+          description: "Number in queue on \"to_dirno_current\". 1 is first in queue. Reported when call is in \"init\", \"queued\" or \"ringing\" state.
+                        If there is an established call (\"in_call\") at \"to_dirno_current\", that call is considered to have position 1,
+                        so the queue starts at 2. A ringing call only have \"queue_pos\" 1 if the device is not in a established call.
+                        If \"to_dirno_current\" is a call queue, queue always start at 1 because established calls are not part of the call queue."
+          example: 1
+      required: [id, state, reason, call_type, from_dirno, from_leg_id, to_dirno, priority, start_time]
 
     call_rich:
       allOf:
@@ -922,7 +1029,7 @@ components:
                 $ref: '#/components/schemas/call_leg_no_inherit'
           required: [call_legs]
 
-    call_leg_no_inherit: # Properties of call leg not inherited from call
+    call_leg_no_inherit:  # Properties of call leg not inherited from call
       type: object
       properties:
         leg_id:
@@ -930,12 +1037,12 @@ components:
         dirno:
           description: "The directory number of the call leg 'owner'. In case of a queue call,
                         this number could be the operator directory number, while 'from_dirno'
-                        is caller and 'to_dirno' is the qeueue number called."
+                        is caller and 'to_dirno' is the queue number called."
           type: string
           example: "101"
         state:
           allOf:
-            - $ref: '#/components/schemas/call_state'
+            - $ref: '#/components/schemas/leg_state'
             - description: "Current state of the leg"
         reason:
           allOf:
@@ -948,6 +1055,12 @@ components:
           type: string
           example: "PJSIP/101-0000002c;3"
           required: [call_legs]
+        queue_pos:
+          type: integer
+          description: "Number in queue on \"dirno\". 1 is first in queue. Reported when call-leg is in \"init\", \"queued\" or \"ringing\" state.
+                        If there is an established call (\"in_call\") at \"dirno\", that call is considered to have position 1,
+                        so the queue starts at 2. A ringing call only have \"queue_pos\" 1 if the device is not in a established call."
+          example: 1
       required: [id, dirno, state, reason, leg_role]
 
     call_leg:
@@ -982,7 +1095,9 @@ components:
           example: "701"
         calls:
           type: array
-          description: "Calls queued in the call queue. Listed in order, first in queue first."
+          description: "Calls queued in the call queue. Listed in order, first in queue first.
+                        Accepted calls (state : in_call) are not included as they no
+                        longer are considered part of the call queue."
           items:
             $ref: '#/components/schemas/call_rich'
         operators:
@@ -995,7 +1110,7 @@ components:
                 type: string
                 description: "Directory number of operator"
                 example: "112"
-      required: [ queue_dirno, calls, operators ]
+      required: [queue_dirno, calls, operators]
 
     deleted_calls:
       type: object
@@ -1021,7 +1136,7 @@ components:
       type: object
       properties:
         id:
-          description: "Identity of the GPO. The values depend on what the hardware supports and the device configuration. Examples: relay1, gpi4, e_relay1, gpo1"
+          description: "Identity of the GPO. The values depend on what the hardware supports and the device configuration. Examples: relay1, gpio1"
           type: string
           example: "relay1"
         state:
@@ -1032,8 +1147,8 @@ components:
         type:
           description: "The type of GPO"
           type: string
-          enum: ["gpo", "relay", "e_relay", "led"]
-          example: "gpo"
+          enum: ["relay", "gpio", "led"]
+          example: "relay"
       required: [id, state, type]
 
     gpi:
@@ -1067,31 +1182,39 @@ components:
         edge:
           description: "Type of keypress"
           type: string
-          enum: [press, tap, release, on, off]
+          enum: [press, tap, release, 'on', 'off']
           example: "press"
-      required: [id,edge]
+      required: [id, edge]
 
     device_account_state:
-        type: object
-        properties:
-          dirno:
-            type: string
-            example: "101"
-            description: "Directory number of device"
-          name:
-            type: string
-            example: "Reception"
-            description: "Name (display name) of the device"
-          location: 
-            type: string
-            example: "Main building"
-            description: "Location of the device. May be empty if not defined."
-          state:
-            enum: ["reachable", "unreachable", "unknown" ]
-            type: string
-            example: "reachable"
-            description: "State of the device"
-        required: [dirno,name,location,state]
+      type: object
+      properties:
+        dirno:
+          type: string
+          example: "101"
+          description: "Directory number of device"
+        name:
+          type: string
+          example: "Reception"
+          description: "Name (display name) of the device"
+        location:
+          type: string
+          example: "Main building"
+          description: "Location of the device. May be empty if not defined."
+        device_ip:
+          type: string
+          example: "192.15.34.2"
+          description: "The IP address of the device. May be empty if the device is offline"
+        device_type:
+          type: string
+          example: "TCIS-1"
+          description: "The device type name"
+        state:
+          enum: ["reachable", "unreachable", "unknown"]
+          type: string
+          example: "reachable"
+          description: "State of the device"
+      required: [dirno, name, location, state]
 
 
     credentials:
@@ -1126,34 +1249,45 @@ components:
       type: object
       properties:
         from_dirno:
-          description: "Caller directory number"
+          description: "Directory number of operator opening door"
           type: string
           example: "101"
         from_name:
-          description: "Displayname of caller"
+          description: "Displayname of operator opening door"
           type: string
           example: "Operator"
         door_dirno:
-          description: "Recipient directory number"
+          description: "Directory number of door"
           type: string
           example: "102"
         door_name:
           description: "Displayname of door"
           type: string
           example: "Door Station"
+        gpo:
+          description: "Present if a GPO is configured to open the door: GPO address, parameters"
+          type: object
+          properties:
+            gpo_id:
+              description: "Id of the gpo/gpio. The values depend on hardware support."
+              example: "relay1"
+            mac_address:
+              $ref: '#/components/schemas/mac_address'
+            time:
+              description: "If operation is set_timed, this is the duration in seconds beeing activated"
+              type: integer
+              example: 3
       required: [from_dirno, from_name, to_dirno, door_name]
 
   responses:
-  
+
     post_call:
-      description: Successful response from call action.
+      description: "Successful response from call action. 201 on call setup, 200 on call answer.
+         call_legs only included if verbose=true."
       content:
         application/json:
           schema:
-            type: object
-            properties:
-              call_id:
-                $ref: '#/components/schemas/call_id'
+            $ref: '#/components/schemas/call_rich'
 
     post_call_id:
       description: "Call action accepted, effect depends on call state"
@@ -1180,7 +1314,7 @@ components:
             $ref: '#/components/schemas/error_reason400'
 
     application_error404:
-      description: "Request could not be carried out. Please see supplied error_reason for details."
+      description: "Resource not found. Please see supplied error_reason for details."
       content:
         application/json:
           schema:
