@@ -15,11 +15,10 @@ info:
 
     **How to Use:**
 
-    Use the **'Authorize'** button and authorize with correct username and password. Then use **/api/auth/login**
-    to get the JWT token which you then copy and paste into Authorize' bearerAuth. The token will then be included
-    in the HTTP header for  all other requests.
+    Use the **'Authorize'** button, under **oAuth2Password (OAuth2, password)**
+    type username as **client_id**, password as **client_secret** and click Authorize
 
-  version: 1.0.0
+  version: 1.1.0
 
 paths:
   #
@@ -127,112 +126,6 @@ paths:
                             enum: ["global", "link"]
         "401":
           $ref: '#/components/responses/unauthorized_error401'
-
-
-  /api/system/license/fingerprint:
-    get:
-      summary: "wamp URI: com.zenitel.system.license.fingerprint"
-      tags: ["System"]
-      description: "Returns the system fingerprint used in license generation"
-      responses:
-        "200":
-          description: "Success: Return fingerprint as JSON and additional system information"
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  binding:
-                    type: string
-                    example: d14a028c2a3a2bc9476102bb288234c415a2b01f828ea62ac5b3e42f
-                  mac:
-                    type: string
-                    example: 12:34:56:78:9a:bc
-                  vm:
-                    type: integer
-                    example: 0
-
-
-        "401":
-          $ref: '#/components/responses/unauthorized_error401'
-        "500":
-          description: "Failed to read hardware fingerprint"
-
-  /api/system/license:
-    post:
-      summary: "wamp URI: com.zenitel.system.license.post"
-      tags: ["System"]
-      description: "Activate licenseses included in signed JSON payload"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                signature:
-                  description: "Validation of license file"
-                  example: "<cryptographic signature>"
-                  type: string
-                payload:
-                  description: "Licenses and other license information"
-                  type: object
-                  properties:
-                    binding:
-                      description: "Hardware specific signature"
-                      type: string
-                      example: "<signature>"
-                    licenses:
-                      type: array
-                      items:
-                        type: object
-                        properties:
-                          license:
-                            type: string
-                            example: "LC-IC1"
-                          description:
-                            type: "string"
-                            example: "Sample Device licenses"
-                          quantity:
-                            type: integer
-                            example: 2
-      responses:
-        "200":
-          description: "License OK"
-        "401":
-          description: "Failed to apply licenses due to issues with the license file"
-
-  /api/system/security/certificate:
-    post:
-      summary: "wamp URI: com.zenitel.system.security.certificate.post"
-      tags: ["System"]
-      description: "Upload certificates as JSON payload"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  description: "Name to give certificate"
-                  example: "webserver.pem"
-                  type: string
-                scope:
-                  description: "Certificate scope"
-                  example: "https"
-                  type: string
-                certificate:
-                  description: "Certificate in PEM format"
-                  example: "-----BEGIN CERTIFICATE-----\nMIIFtzC...\n-----END CERTIFICATE-----\n-----BEGIN RSA PRIVATE KEY-----\nMIIJKgIBAAK..\n-----END RSA PRIVATE KEY-----"
-                  type: string
-      responses:
-        "200":
-          description: "Certificate applied"
-        "401":
-          description: "Failed to apply certificate due to issues with the provided certificate"
-        "500":
-          description: "Server error"
 
   /api/devices/device;{device_id}/gpos/gpo;{gpo_id}:
     post:
@@ -387,11 +280,11 @@ paths:
               type: object
               properties:
                 from_dirno:
-                  description: "Originating SIP endpoint"
+                  description: "Originating SIP endpoint. Must be an internal account or audio message."
                   example: "101"
                   type: string
                 to_dirno:
-                  description: "Destination SIP endpoint"
+                  description: "Destination SIP endpoint or feature"
                   example: "102"
                   type: string
                 action:
@@ -652,6 +545,141 @@ paths:
         "404":
           description: "Device is not in call or has no door assigned"
 
+  /api/system/audio_messages:
+    get:
+      summary: "wamp URI: com.zenitel.system.audio_messages"
+      tags: ["System"]
+      description: "Get a list of uploaded audio_messages"
+      responses:
+        "200":
+          description: "List of audio messages"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  audio_messages:
+                    type: array
+                    description: "Returns list of the audio messages."
+                    items:
+                      type: object
+                      properties:
+                        dirno:
+                          type: string
+                          description: "Directory number of audio message"
+                          example: "9001"
+                        filename:
+                          type: string
+                          description: "Filename of audio message"
+                          example: "test.wav"
+                        filepath:
+                          type: string
+                          description: "HTTP path of audio message for GET"
+                          example: "/files/audio/messages/test.wav"
+                        filesize:
+                          type: integer
+                          description: "File size of stored message in bytes"
+                          example: 200000
+                        duration:
+                          type: integer
+                          description: "Duration of voice message in seconds"
+                          example: 30
+                  used_space:
+                    type: integer
+                    description: "Total space used on system for stored messages in bytes"
+                    example: 200000
+                  available_space:
+                    type: integer
+                    description: "Available space on system for stored messages in bytes"
+                    example: 20000000
+
+  /api/groups:
+    get:
+      summary: "wamp URI: com.zenitel.groups"
+      tags: ["System"]
+      description: "Get list of configured device groups (group calls)"
+      parameters:
+        - in: query
+          name: dirno
+          description: "Optional query parameter to filter on specific group (call)"
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: verbose
+          required: false
+          description: "If true, group members are also included in the response"
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: "List of audio messages"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    dirno:
+                      type: string
+                      description: "Directory number of group call"
+                      example: "84"
+                    displayname:
+                      type: string
+                      description: "Displayname number of group call"
+                      example: "All call"
+                    priority:
+                      $ref: '#/components/schemas/call_priority'
+                    call_timeout:
+                      type: integer
+                      description: "Max duration for call"
+                      example: 3600
+                    members:
+                      type: array
+                      description: "Directory numbers of group members, only included if verbose=true"
+                      items:
+                        type: string
+                        description: "Directory number of group call member"
+                        example: "101"
+
+  /api/directory:
+    get:
+      summary: "wamp URI: com.zenitel.directory"
+      tags: ["System"]
+      description: "Get list of configured directory numbers"
+      parameters:
+        - in: query
+          name: dirno
+          description: "Optional query parameter to filter on specific directory number"
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: "List of directory numbers"
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    dirno:
+                      type: string
+                      description: "Directory number"
+                      example: "101"
+                    displayname:
+                      type: string
+                      description: "Display name of directory number"
+                      example: "Control room"
+                    feature_type:
+                      type: string
+                      enum: ["device_call", "queue_call", "trunk_prefix", "group_call", "message_call"]
+                      description: "Feature type of directory number"
+                      example: "device_call"
+
   #
   #  WAMP Events
   #
@@ -661,9 +689,6 @@ paths:
       tags: ["Events"]
       description: "Subscribe to call events. Whenever a call is initiated, progress or hangup, an event will be published on this channel.
                     This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
-      externalDocs:
-        description: "Wamp subscribe:"
-        url: "https://crossbar.io/docs/How-Subscriptions-Work/"
       responses:
         "Event":
           description: "A call event occurred"
@@ -679,9 +704,6 @@ paths:
       description: "Subscribe to call leg events. Whenever a call leg is initiated or updated, an event will be published
                     on this channel.
                     This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
-      externalDocs:
-        description: "Wamp subscribe:"
-        url: "https://crossbar.io/docs/How-Subscriptions-Work/"
       responses:
         "Event":
           description: "A call event occurred"
@@ -696,9 +718,6 @@ paths:
       tags: ["Events"]
       description: "Subscribe on gpo/relay changes.
                     This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
-      externalDocs:
-        description: "Wamp subscribe:"
-        url: "https://crossbar.io/docs/How-Subscriptions-Work/"
       parameters:
         - in: path
           name: dirno
@@ -718,9 +737,6 @@ paths:
       summary: "Subscribe to device gpi's"
       tags: ["Events"]
       description: "Subscribe on gpi/gpio changes. This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
-      externalDocs:
-        description: "Wamp subscribe:"
-        url: "https://crossbar.io/docs/How-Subscriptions-Work/"
       parameters:
         - in: path
           name: dirno
@@ -740,9 +756,6 @@ paths:
       summary: "Subscribe to state change of devices"
       tags: ["Events"]
       description: "Subscribe to device state changes. This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
-      externalDocs:
-        description: "Wamp subscribe:"
-        url: "https://crossbar.io/docs/How-Subscriptions-Work/"
       responses:
         "Event":
           description: "A new device was added or change in SIP registration."
@@ -756,9 +769,6 @@ paths:
       summary: "WAMP subscribe to open door events"
       tags: ["Events"]
       description: "Dialing digit 6 in conversation will trigger an open door event. This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
-      externalDocs:
-        description: "Wamp subscribe:"
-        url: "https://crossbar.io/docs/How-Subscriptions-Work/"
       responses:
         "Event":
           description: "A call event occurred"
@@ -776,9 +786,6 @@ paths:
         https://wamp-proto.org/_static/gen/wamp_latest.html#x14-5-1-2-session-meta-events,
         except that the data is placed in 'arglist[0]', not in 'details'.
         This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
-      externalDocs:
-        description: "Wamp subscribe:"
-        url: "https://crossbar.io/docs/How-Subscriptions-Work/"
       responses:
         "Event":
           description: "A subscriber joined the session"
@@ -805,9 +812,6 @@ paths:
       summary: "Subscribe to WAMP session close event"
       tags: ["Events"]
       description: "Subscribe WAMP connection close event. This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
-      externalDocs:
-        description: "Wamp subscribe:"
-        url: "https://crossbar.io/docs/How-Subscriptions-Work/"
       responses:
         "Event":
           description: "A subscriber left the session"
@@ -831,7 +835,7 @@ paths:
 
 
 security:
-  - bearerAuth: []
+  - oAuth2Password: []
 
 #
 # Table of tags
@@ -849,13 +853,16 @@ tags:
 #
 components:
   securitySchemes:
+    oAuth2Password:
+      type: oauth2
+      description: Type username as client_id, password as client_secret
+      flows:
+        password:
+          tokenUrl: /api/auth/login
+          scopes: {}
     basicAuth:
       type: http
       scheme: basic
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
 
   schemas:
     mac_address:
@@ -959,14 +966,14 @@ components:
     call_reason:
       type: string
       description: "The reason for last change of the call / call-leg state)"
-      enum: ["incoming", "rpc", "busy", "timeout", "progress", "unconditional", "from_ring", "accept",
-             "other_answer", "auto-answer", "cancel", "reject", "success", "failure", "priority", "hangup"]
+      enum: ["incoming", "rpc", "busy", "unreachable", "incomplete", "timeout", "progress", "unconditional", "from_ring", "accept",
+             "other_answer", "auto-answer", "cancel", "reject", "success", "failure", "priority", "server_hangup", "hangup"]
       example: "accept"
 
     call_type:
       type: string
       description: "The type of call. Supported as of now is normal two party call and queue call."
-      enum: ["normal_call", "queue_call", "activation_call"]
+      enum: ["normal_call", "queue_call", "group_call", "message_play", "activation_call"]
 
     call_priority:
       type: integer
@@ -1002,6 +1009,13 @@ components:
           description: "Currently called directory number. Initially same as to_dirno, but may be updated as call progresses due to queue call answer or call forwarding."
           type: string
           example: "102"
+        groups:
+          type: array
+          description: "List of groups targeted by group call. Only present when call_type = group_call"
+          items:
+            type: string
+            description: "Group call directory number"
+            example: "84"
         priority:
           $ref: '#/components/schemas/call_priority'
         start_time:
@@ -1225,8 +1239,8 @@ components:
           description: The JWT token to use in the HTTP header as Authorization Bearer in other requests
         token_type:
           type: string
-          description: "The token type which for now can only be JWT"
-          enum: [JWT]
+          description: "The token type which for now can only be Bearer"
+          enum: [Bearer]
 
     # could have one common, but better examples improves the impressions
     error_reason400:
