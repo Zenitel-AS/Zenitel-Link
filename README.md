@@ -11,4 +11,4 @@ Please see section **Events** and **Trace** buttons below for event defintions. 
 The REST interface is a wrapper for the WAMP interface, hence, every REST operation has a WAMP counterpart which can be used directly.
 
 
-Visit Github pages the interactive OpenAPI specification: https://zenitel-as.github.io/Zenitel-Link/
+Visit Github Pages for the interactive OpenAPI specification: https://zenitel-as.github.io/Zenitel-Link/
