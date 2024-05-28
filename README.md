@@ -9,3 +9,6 @@
 Most of the REST operations will result in one or more system events through the WAMP interface. There are events published at changes in call progress, call queue changes, door opened etc.
 Please see section **Events** and **Trace** buttons below for event defintions. It is possible to poll information using the REST it is way more efficient to subscribe to the WAMP events. 
 The REST interface is a wrapper for the WAMP interface, hence, every REST operation has a WAMP counterpart which can be used directly.
+
+
+Visit Github pages the interactive OpenAPI specification: https://zenitel-as.github.io/Zenitel-Link/
