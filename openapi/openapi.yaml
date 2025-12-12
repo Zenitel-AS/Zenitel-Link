@@ -18,7 +18,7 @@ info:
     Use the **'Authorize'** button, under **oAuth2Password (OAuth2, password)**
     type username as **client_id**, password as **client_secret** and click Authorize
 
-  version: 1.1.0
+  version: 1.2.0
 
 paths:
   #
@@ -46,6 +46,46 @@ paths:
               schema:
                 $ref: '#/components/schemas/credentials'
 
+  /api/auth/refresh:
+    post:
+      tags: ["Authentication"]
+      description: "Refresh JWT tokens and return new access JWT token and refresh JWT token."
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                refresh_token:
+                  description: "Valid refresh token!"
+                  example: Valid refresh JWT token
+                  type: string
+              required:
+                - refresh_token
+      responses:
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
+        "200":
+          description: "Provided correct refresh JWT token"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/credentials'
+
+  /api/auth/logout:
+    post:
+      tags: ["Authentication"]
+      description: "Performs logout on current user, invalidates JWT before expiry."
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: "User has been logged out, and user token will now be invalid. New login required for access"
+        "401":
+          $ref: '#/components/responses/unauthorized_error401'
 
   #
   #  WAMP System RPCs
@@ -65,6 +105,8 @@ paths:
                     - Reachable means the device is SIP registered and a valid endpoint.
                     - Unreachable means the device is offline or lost contact with the server.
                     - Unknown could be that the device is added as a managed device, but is still not registered to the server, or some other reason.
+                    - wamp_status: Offline means the device has lost contact with the server or device is not native device.
+                    - wamp_status: Online means the device is WAMP-registered and device is native device.
           required: false
           schema:
             $ref: '#/components/schemas/device_account_filter'
@@ -268,10 +310,15 @@ paths:
     post:
       summary: "wamp URI: com.zenitel.calls.post"
       tags: ["Call Handling"]
-      description: "Setup a call from the originating SIP endpoint to a destination endpoint. The progress of the call
-                    may be followed by subscribing to 'com.zenitel.calls' event topic. The RPC waits for the call
-                    to progress to one of the states 'queued', 'ringing', 'in_call' or 'ended', and responds with
-                    the current call state record."
+      description: >
+        Setup a call from the originating SIP endpoint to a destination endpoint. The progress of the call
+        may be followed by subscribing to 'com.zenitel.calls' event topic. The RPC waits for the call
+        to progress to one of the states 'queued', 'ringing', 'in_call' or 'ended', and responds with
+        the current call state record.
+
+
+        The priority parameter is only applicable for direct calls and will be ignored for broadcasts,
+        calls to call queues and other call types where the priority is configured specifically for the particular function.
       requestBody:
         required: true
         content:
@@ -295,11 +342,19 @@ paths:
                 verbose:
                   description: "If true, call_leg information is nested into the response"
                   type: boolean
+                priority:
+                  description: "Priority of call from 1 (High) to 250 (Low), default 40.
+                                An urgent (21) call and higher will be connected in Open (Auto-answer) mode,
+                                a normal (41) call will be annunciated depending on the setting of the receiving station."
+                  example: 40
+                  type: integer
       responses:
         "200":
           $ref: '#/components/responses/post_call'
         "201":
           $ref: '#/components/responses/post_call'
+        "403":
+          $ref: '#/components/responses/application_error403'
         "404":
           $ref: '#/components/responses/application_error404'
         "400":
@@ -545,7 +600,124 @@ paths:
         "404":
           description: "Device is not in call or has no door assigned"
 
+  /files/upload/audio_message/{filename}:
+    put:
+      summary: Upload a file to Zenitel Connect Pro.
+      tags: ["System"]
+      description: "Upload a file to Zenitel Connect Pro. File size is maximum 20MByte but may be further restricted by the available storage space in Zenitel Connect Pro."
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          audio/wav:  # For .wav .wav16
+            schema:
+              type: string
+              format: binary
+          audio/opus:
+            schema:
+              type: string
+              format: binary
+          audio/flac:
+            schema:
+              type: string
+              format: binary
+          audio/webm:
+            schema:
+              type: string
+              format: binary
+          audio/weba:
+            schema:
+              type: string
+              format: binary
+          audio/ogg:  # for .ogg and .oga
+            schema:
+              type: string
+              format: binary
+          audio/x-m4a:  # Commonly used MIME type for .m4a
+            schema:
+              type: string
+              format: binary
+          audio/midi:   # Common MIME type for .mid .midi .kar
+            schema:
+              type: string
+              format: binary
+          audio/mpeg:   # For .mp3
+            schema:
+              type: string
+              format: binary
+          audio/aiff:   # For .aiff .aif
+            schema:
+              type: string
+              format: binary
+          audio/x-ms-wma:   # Commonly used MIME type for .wma
+            schema:
+              type: string
+              format: binary
+          audio/basic:  # For .au .snd
+            schema:
+              type: string
+              format: binary
+        description: A list of supported audio file formats.
+
+      responses:
+        '201':
+          description: "File uploaded successfully"
+        '204':
+          description: "File already exists"
+        '400':
+          description: "Invalid file or path or Content-Type"
+        '401':
+          description: "Error: Unauthorized"
+        '403':
+          $ref: '#/components/responses/application_error403'
+        '413':
+          description: "Error: Request Entity Too Large"
+
   /api/system/audio_messages:
+    post:
+      summary: "wamp URI: com.zenitel.system.audio_messages.post"
+      tags: ["System"]
+      description: >
+                  Import an uploaded audio file to an audio_message. Convert to internal
+                  format, update the audio_message table. `displayname` and `repetitions`
+                  are optional parameters. `repetitions` is JSON null (continuous) or a positive
+                  number. If `repetitions` is missed or a negative number, the default value (1)
+                  will be used.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  description: "Orignal filename of file uploaded to /files/upload"
+                  example: 'test.wav'
+                  type: string
+                dirno:
+                  description: "Directory number of audio_messages"
+                  example: '700'
+                  type: string
+                displayname:
+                  type: string
+                  description: "Display name if you dial the message. It will be the dirno if this parameter is empty."
+                  example: "Fire Alarm"
+                  nullable: true
+                repetitions:
+                  description: "Number of times the message is played, default 1. null means continous."
+                  example: 1
+                  type: integer
+                  nullable: true
+      responses:
+        "200":
+          description: "File imported to audio_message"
+        "400":
+          description: "Missing file, filename or dirno argument"
     get:
       summary: "wamp URI: com.zenitel.system.audio_messages"
       tags: ["System"]
@@ -680,6 +852,118 @@ paths:
                       description: "Feature type of directory number"
                       example: "device_call"
 
+  /api/call_forwarding:
+    get:
+      summary: "wamp URI: com.zenitel.call_forwarding"
+      tags: ["System"]
+      description: "Returns list of current call forwarding rules"
+      parameters:
+        - in: query
+          name: dirno
+          description: "If provided, only return call forwarding rules owned by this directory number."
+          required: false
+          schema:
+            type: string
+            example: "101"
+        - in: query
+          name: fwd_type
+          description: "If provided, only return call forwarding rules of this type"
+          required: false
+          schema:
+            $ref: "#/components/schemas/fwd_type"
+      responses:
+        "200":
+          description: "Current call forwarding status"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/call_forward_list"
+        "400":
+          description: "Invalid request parameters"
+    post:
+      summary: "wamp URI: com.zenitel.call_forwarding.post"
+      tags: ["System"]
+      description: |
+        Add or update a number of call forwarding rules. Input is an array of
+        call forwarding rule objects. Key fields for a call forwarding rule are
+        "dirno" and "fwd_type". Both must be present in the forwarding objects.
+
+        If "dirno" and "fwd_type" do not match existing entry, the rule is added.
+
+        Otherwise existing entry is updated. On update, only the fields included
+        in the request object are updated. Fields *not* included in the request
+        object are preserved.
+
+        The request return 200 OK if top level input is an array of objects.
+        Check "error_cnt" and "errors" list in response for actual results for
+        the operations.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/call_forward_list"
+      responses:
+        "200":
+          description: "Top level post structure accepted. \"error_cnt \"say how many input entries failed"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error_cnt:
+                    type: integer
+                    description: "Number of rule update that failed"
+                    example: 0
+                  update_cnt:
+                    type: integer
+                    description: "Number of added or updated entries"
+                    example: 1
+                  errors:
+                    type: array
+                    description: "Array, one item for each input object"
+                    items:
+                      type: string
+                      nullable: true
+                      description: "Error message. JSON null mean no error"
+                      example: null
+        "400":
+          description: "Invalid request parameters"
+    delete:
+      summary: "wamp URI: com.zenitel.call_forwarding.delete"
+      tags: ["System"]
+      description: "Delete call forwarding settings of specified directory number, forwarding type"
+      parameters:
+        - in: query
+          name: dirno
+          description: "Delete call forwarding rules owned by this directory number. Use \"alldirno\" to match all"
+          required: true
+          schema:
+            type: string
+            example: "101"
+        - in: query
+          name: fwd_type
+          description: "Delete call forwarding rules of this type. Use \"all\" to match all"
+          required: true
+          schema:
+            type: string
+            enum: [unconditional, on_timeout, on_busy, all]
+
+      responses:
+        "200":
+          description: "Parameters accepted. \"delete_cnt \"say how many entries was deleted "
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  delete_cnt:
+                    type: integer
+                    description: "Number of deleted entries"
+                    example: 1
+        "400":
+          description: "Invalid request parameters"
+
   #
   #  WAMP Events
   #
@@ -712,18 +996,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/call_leg'
 
-  com.zenitel.device.{dirno}.gpo:
+  com.zenitel.system.event_trigger:
+    trace:
+      summary: "WAMP subscribe to event trigger"
+      tags: ["Events"]
+      description: "Subscribe to event trigger.
+                   Whenever a call to event trigger with directory number in directory services table, the event trigger is initiated, progressed, and be published on this channel.
+                   This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
+      responses:
+        "Event":
+          description: "An event trigger occurred"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from_dirno:
+                    type: string
+                    example: "1001"
+                    description: "Source directory number"
+                  to_dirno:
+                    type: string
+                    example: "7900"
+                    description: "Destination directory number"
+                required:
+                  - from_dirno
+                  - to_dirno
+
+  com.zenitel.device.gpo:
     trace:
       summary: "Subscribe to device gpo's"
       tags: ["Events"]
       description: "Subscribe on gpo/relay changes.
                     This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
-      parameters:
-        - in: path
-          name: dirno
-          required: true
-          schema:
-            type: string
       responses:
         "Event":
           description: "A gpo/relay change happened"
@@ -732,17 +1037,11 @@ paths:
               schema:
                 $ref: '#/components/schemas/gpo'
 
-  com.zenitel.device.{dirno}.gpi:
+  com.zenitel.device.gpi:
     trace:
       summary: "Subscribe to device gpi's"
       tags: ["Events"]
       description: "Subscribe on gpi/gpio changes. This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
-      parameters:
-        - in: path
-          name: dirno
-          required: true
-          schema:
-            type: string
       responses:
         "Event":
           description: "A change in gpi/gpoi was made"
@@ -832,10 +1131,105 @@ paths:
                     description: "WAMP authorization role"
                     example: "device"
                     type: string
+  com.zenitel.system.device.extended_status:
+    trace:
+      summary: "Subscribe to WAMP session to publish test results for tone and button tests"
+      tags: ["Events"]
+      description: "Subscribe to WAMP to publish est results for tone and button tests. This is <b>only</b> used for documenting wamp subscribe, HTTP GET to this URL does nothing."
+      responses:
+        "Event":
+          description: "Publish test results for tone and button tests"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  current_status:
+                    description: "Tone test result"
+                    example: "passed"
+                    type: string
+                    enum: [passed, failed, busy]
+                  device_id:
+                    description: "Device id"
+                    example: "4"
+                    type: int
+                  dirno:
+                    description: "Device dirno"
+                    example: "103"
+                    type: string
+                  error_message:
+                    description: "Error message"
+                    example: "Test PASSED, silence: -91 tone: -130"
+                    type: string
+                  last_fail:
+                    description: "Last fail time"
+                    example: "2024-10-29T15:12:30.717033+00:00"
+                    type: timestamptz
+                  last_pass:
+                    description: "Last pass time"
+                    example: "2024-10-29T15:12:23.70557+00:00"
+                    type: timestamptz
+                  last_queued:
+                    description: "Last queued time"
+                    example: "2024-10-29T15:12:22.062465+00:00"
+                    type: timestamptz
+                  pending_test:
+                    description: "Pending test(true or false)"
+                    example: "false"
+                    type: boolean
+                  status_type:
+                    description: "status type(tonetest or buttontest)"
+                    example: "tonetest"
+                    type: string
+                    enum: [tonetest, buttontest]
+  /api/system/devices/test/tone:
+    post:
+      summary: "wamp URI : com.zenitel.system.devices.test.tone.post"
+      tags: ["Tone test"]
+      description: "Start Tone test for Dirno."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dirno:
+                  description: "Directory number of tone test"
+                  example: '700'
+                  type: string
+              required: [dirno]
+      responses:
+        "202":
+          description: "Tone test for Dirno started. Zero pending devices means no devices to test, a non-zero count means a test is in progress."
+        "200":
+          description: "The tone test was not performed. This could be due to devices being offline or missing, or because a test is already running."
 
+  /api/system/devices/test/button:
+    post:
+      summary: "wamp URI : com.zenitel.system.devices.test.button.post"
+      tags: ["Button test"]
+      description: "Start button test for Dirno."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dirno:
+                  description: "Directory number of button test"
+                  example: '700'
+                  type: string
+      responses:
+        "202":
+          description: "Button test for Dirno started. Zero pending devices means no devices to test, a non-zero count means a test is in progress."
+        "200":
+          description: "The Button test was not performed. This could be due to devices being offline or missing, or because a test is already running."
 
 security:
   - oAuth2Password: []
+  - bearerAuth: []
 
 #
 # Table of tags
@@ -859,10 +1253,15 @@ components:
       flows:
         password:
           tokenUrl: /api/auth/login
+          refreshUrl: /api/auth/refresh
           scopes: {}
     basicAuth:
       type: http
       scheme: basic
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
 
   schemas:
     mac_address:
@@ -1149,40 +1548,50 @@ components:
     gpo:
       type: object
       properties:
+        dirno:
+          description: "Directory number of operator"
+          type: string
+          example: "1001"
+        gpios:
+          description: "Bitmap for gpios"
+          type: string
+          example: "f--0--"
         id:
           description: "Identity of the GPO. The values depend on what the hardware supports and the device configuration. Examples: relay1, gpio1"
           type: string
-          example: "relay1"
-        state:
+          example: "gpio1"
+        operation:
           description: "The state of the GPO"
           type: string
           enum: [high, low, slow_blink, fast_blink, timer]
-          example: "high"
-        type:
-          description: "The type of GPO"
+          example: "fast_blink"
+        relays:
+          description: "The gpio pin on the device"
           type: string
-          enum: ["relay", "gpio", "led"]
-          example: "relay"
-      required: [id, state, type]
+          example: "0"
+      required: [id, operation, relays]
 
     gpi:
       type: object
       properties:
+        dirno:
+          description: "Directory number of operator"
+          type: string
+          example: "1001"
+        gpis:
+          description: "Identity of the GPIs."
+          type: string
+          example: "100"
         id:
           description: "Identity of the GPI. The values depend on what the hardware supports and the device configuration."
           type: string
-          example: "gpi4"
+          example: "gpi3"
         state:
           description: "The state of the GPI"
           type: string
-          enum: [high, low]
-          example: "high"
-        type:
-          description: "The type of GPI"
-          type: string
-          enum: ["gpi"]
-          example: "gpi"
-      required: [id, state, type]
+          enum: [active, inactive]
+          example: "active"
+      required: [id, state]
 
 
     key:
@@ -1228,6 +1637,10 @@ components:
           type: string
           example: "reachable"
           description: "State of the device"
+        wamp_status:
+          enum: ["Online", "Offline"]
+          type: string
+          example: "Online"
       required: [dirno, name, location, state]
 
 
@@ -1236,11 +1649,48 @@ components:
       properties:
         access_token:
           type: string
-          description: The JWT token to use in the HTTP header as Authorization Bearer in other requests
+          description: The access JWT token
+        expires_in:
+          type: integer
+          description: "Expiration time for access JWT token in second."
+          example: 300
+        refresh_token:
+          type: string
+          description: The JWT token to use in the HTTP body as Authorization Bearer in other requests
         token_type:
           type: string
           description: "The token type which for now can only be Bearer"
           enum: [Bearer]
+
+    fwd_type:
+      type: string
+      enum: [unconditional, on_timeout, on_busy]
+      description: "Type of call forwarding"
+      example: "unconditional"
+
+    call_forward:
+      type: object
+      properties:
+        dirno:
+          type: string
+          description: Owner of call forward rule, directory number
+          example: "101"
+        fwd_type:
+          $ref: '#/components/schemas/fwd_type'
+          description: "Type of call forwarding"
+        fwd_to:
+          type: string
+          description: "Forward call to this number, directory number, external number"
+          example: "300"
+        enabled:
+          type: boolean
+          description: "Call forwarding only takes place if enabled is true"
+          example: true
+
+    call_forward_list:
+      type: array
+      items:
+        $ref: '#/components/schemas/call_forward'
 
     # could have one common, but better examples improves the impressions
     error_reason400:
@@ -1250,6 +1700,14 @@ components:
           type: string
           description: "Detailed reason why the request could not be carried out."
           example: "Bad request, required arguments missing or invalid"
+
+    error_reason403:
+      type: object
+      properties:
+        error_reason:
+          type: string
+          description: "Detailed reason why the request could not be carried out."
+          example: "Insufficient permissions to access resource"
 
     error_reason404:
       type: object
@@ -1326,6 +1784,13 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/error_reason400'
+
+    application_error403:
+      description: "Forbidden."
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/error_reason403'
 
     application_error404:
       description: "Resource not found. Please see supplied error_reason for details."
